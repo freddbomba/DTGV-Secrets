@@ -19,6 +19,7 @@ places where the spec left an ambiguity.
 
 ## Contents
 
+- [User instructions (step by step)](#user-instructions-step-by-step)
 - [Install](#install)
 - [Trust model](#trust-model)
 - [Folder layout](#folder-layout)
@@ -71,6 +72,129 @@ Check which backend is available:
 interview-intake --help
 interview-intake config show   # prints "Available age backends"
 ```
+
+---
+
+## User instructions (step by step)
+
+This is the practical walkthrough for the two roles. The sections after it are
+the detailed reference.
+
+### A. Supervisor — set up the project once
+
+1. **Create the shared folder** in Nextcloud, e.g. `~/Nextcloud/project`.
+
+2. **Create the escrow key** on the supervisor's machine (keep it off researcher
+   machines — it can decrypt every interview):
+
+   ```bash
+   interview-intake keygen --out ~/.config/interview-intake/keys --name supervisor
+   ```
+
+   (Alternatively `interview-intake setup --create-escrow` creates it alongside a
+   config.) Copy the printed `Public key` (`age1...`).
+
+3. **Create `registry.json`** in the shared folder. The app **never creates or
+   edits this file** (spec section 15). Start from
+   [`examples/registry.example.json`](examples/registry.example.json) and put the
+   escrow public key in `supervisor`:
+
+   ```json
+   {
+     "schema_version": 1,
+     "researchers": {},
+     "supervisor": { "age_public_key": "age1...<escrow>" },
+     "last_serial": 0,
+     "issued": []
+   }
+   ```
+
+4. **Register each researcher.** When a researcher sends you their public key,
+   add an entry under `researchers`:
+
+   ```json
+   "abc": { "display_name": "Researcher ABC", "age_public_key": "age1...<theirs>", "active": true }
+   ```
+
+5. **Back up the escrow key** (paper copy + offline encrypted copy). It is the
+   durable access path if a researcher leaves.
+
+### B. Researcher — set up this machine once
+
+1. **Install** the app (see [Install](#install)).
+
+2. **First run** — `setup` creates the config and a private key *if missing* and
+   never overwrites an existing key:
+
+   ```bash
+   interview-intake setup \
+     --researcher-id abc \
+     --project-path ~/Nextcloud/project \
+     --sync-root   ~/Nextcloud \
+     --install-templates
+   ```
+
+   It prints your **public key**. Send it to the supervisor.
+
+3. **Wait until the supervisor confirms** your key is in `registry.json`.
+
+4. **Check the wiring:**
+
+   ```bash
+   interview-intake config show
+   interview-intake open --list
+   ```
+
+### C. Researcher — ingest an interview
+
+1. Plug in the SD card.
+2. Run intake:
+
+   ```bash
+   interview-intake intake /media/SDCARD/REC_0042.wav -m xyz
+   ```
+
+   - `-m xyz` is a 3-letter mnemonic you choose (reserved words are rejected).
+   - Add `--yes` for a non-interactive run.
+   - Add `--wipe --eject` to erase the source and eject the card afterwards.
+3. The app prints the new interview ID, e.g. `2026-abc-xyz-0001`, and writes
+   `audio.age`, `meta.json`, `transcript.md`, `note.md` into the shared folder.
+4. After transcribing, edit `transcript.md` / `note.md` in Nextcloud.
+
+### D. Researcher — open (decrypt) an interview
+
+1. List interviews: `interview-intake open --list`
+2. Decrypt and play:
+
+   ```bash
+   interview-intake open 2026-abc-xyz-0001
+   ```
+
+   or write it somewhere specific without launching a player:
+
+   ```bash
+   interview-intake open 2026-abc-xyz-0001 -o ~/tmp/iv.wav --no-open
+   ```
+
+3. **Delete the decrypted file when done.** The app refuses to decrypt into the
+   Nextcloud sync folder.
+
+### Quick command reference
+
+| Task | Command |
+|---|---|
+| First-run setup (researcher) | `interview-intake setup --researcher-id abc --project-path P --sync-root S` |
+| Add escrow key (supervisor) | `interview-intake setup --create-escrow` (or `keygen --name supervisor`) |
+| Show config / backends | `interview-intake config show` |
+| Ingest audio | `interview-intake intake <file-or-dir> -m <bbb>` |
+| List interviews | `interview-intake open --list` |
+| Decrypt one | `interview-intake open <id> [-o path] [--no-open]` |
+| Check integrity | `interview-intake verify` |
+| Seed templates | `interview-intake templates --overwrite` |
+
+> **Keys are created only if missing.** Re-running `setup` or `keygen` prints the
+> existing public key instead of replacing it. Use `--force` only to deliberately
+> rotate a key — old interviews stay encrypted to the old key.
 
 ---
 
