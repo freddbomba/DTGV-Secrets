@@ -20,10 +20,13 @@ pyrage = ["pyrage>=1.1"]
 duration = ["mutagen>=1.45"]
 # Optional drag-and-drop GUI.
 gui = ["tkinterdnd2>=0.3"]
-dev = ["pytest>=7", "pytest-cov>=4", "pyrage>=1.1", "mutagen>=1.45"]
+# Excel export of pro forma data.
+excel = ["openpyxl>=3.1"]
+dev = ["pytest>=7", "pytest-cov>=4", "pyrage>=1.1", "mutagen>=1.45", "openpyxl>=3.1"]
 
 [project.scripts]
 interview-intake = "interview_intake.cli:main"
+pro-forma-to-excel = "interview_intake.proforma:main"
 
 [project.gui-scripts]
 interview-intake-gui = "interview_intake.gui:main"

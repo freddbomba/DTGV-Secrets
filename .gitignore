@@ -12,6 +12,9 @@ htmlcov/
 *.age
 !tests/**/*.age
 
+# Generated reports
+*.xlsx
+
 # Local tooling state (pi-smart-router etc.)
 .pi-smart-router/
 
