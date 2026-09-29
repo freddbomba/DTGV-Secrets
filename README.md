@@ -19,8 +19,9 @@ places where the spec left an ambiguity.
 
 ## Contents
 
-- [User instructions (step by step)](#user-instructions-step-by-step)
 - [Install](#install)
+- [macOS setup (Tahoe / macOS 26)](#macos-setup-tahoe--macos-26)
+- [User instructions (step by step)](#user-instructions-step-by-step)
 - [Trust model](#trust-model)
 - [Folder layout](#folder-layout)
 - [Supervisor setup](#supervisor-setup-one-time)
@@ -72,6 +73,132 @@ Check which backend is available:
 interview-intake --help
 interview-intake config show   # prints "Available age backends"
 ```
+
+---
+
+## macOS setup (Tahoe / macOS 26)
+
+For macOS 26 "Tahoe" (including 26.6), on both Apple Silicon and Intel. The app
+needs Python **3.11 or newer**; these steps install 3.11. Any 3.12/3.13 also
+works.
+
+### 1. Open Terminal
+
+- Press `⌘ + Space`, type `Terminal`, and press Return, **or**
+- open **Finder → Applications → Utilities → Terminal**.
+
+### 2. Check for Python
+
+```bash
+python3 --version
+```
+
+If it prints `Python 3.11.x` or newer, skip to
+[step 4](#4-create-the-app-environment). Do not rely on the bare system
+`/usr/bin/python3` stub; install a real 3.11.
+
+### 3. Install Python 3.11
+
+#### Option A — Homebrew (recommended)
+
+1. Install the Xcode command-line tools (needed by Homebrew):
+
+   ```bash
+   xcode-select --install
+   ```
+
+2. Install Homebrew (skip if `brew --version` already works):
+
+   ```bash
+   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+   ```
+
+   On Apple Silicon, add Homebrew to the current shell as the installer asks:
+
+   ```bash
+   eval "$(/opt/homebrew/bin/brew shellenv)"
+   ```
+
+3. Install Python 3.11 (and Tk if you want the optional drag-and-drop GUI):
+
+   ```bash
+   brew install python@3.11
+   brew install python-tk@3.11      # optional, for the GUI
+   ```
+
+4. Confirm the interpreter:
+
+   ```bash
+   "$(brew --prefix python@3.11)/bin/python3.11" --version
+   ```
+
+#### Option B — python.org installer (no Homebrew; bundles Tk)
+
+1. In a browser, open <https://www.python.org/downloads/macos/> and download the
+   latest **Python 3.11.x macOS 64-bit universal2 installer**.
+2. Open the downloaded `.pkg`, click through the installer, and enter your
+   password when prompted.
+3. Confirm the interpreter:
+
+   ```bash
+   python3.11 --version
+   ```
+
+> If `python@3.11` is no longer offered by Homebrew, use `python@3.12` (or newer)
+> instead — the app supports 3.11 and up.
+
+### 4. Create the app environment
+
+From the project folder (use `cd` to go wherever you cloned `DTGV-Secrets`):
+
+```bash
+# Homebrew (Option A) — explicit path works even if python3.11 is not on PATH:
+PYTHON="$(brew --prefix python@3.11)/bin/python3.11"
+
+# python.org (Option B):
+# PYTHON=python3.11
+
+"$PYTHON" -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -e '.[pyrage,duration]'
+```
+
+Then check it:
+
+```bash
+python --version
+interview-intake --help
+```
+
+### 5. First run
+
+```bash
+interview-intake setup --researcher-id abc \
+  --project-path ~/Nextcloud/project \
+  --sync-root   ~/Nextcloud \
+  --install-templates
+```
+
+See [User instructions (step by step)](#user-instructions-step-by-step) for the
+rest of the workflow.
+
+### macOS notes
+
+- **Backends.** `pyrage` installs as a prebuilt wheel on Apple Silicon and Intel,
+  so no compiler is required. To use the `age` CLI instead: `brew install age`.
+- **GUI / drag-and-drop.** Requires Tkinter (bundled by the python.org installer,
+  or `python-tk@3.11` with Homebrew) plus `pip install -e '.[gui]'`. Without it,
+  the CLI works exactly as documented and is the supported path.
+- **SD cards** mount under `/Volumes/<NAME>`. Quote the path if it contains
+  spaces:
+
+  ```bash
+  interview-intake intake "/Volumes/NO NAME/REC_0042.wav" -m xyz
+  ```
+
+- **Gatekeeper.** Installing with `pip` needs no signing or notarization. Only a
+  packaged `.app` would require a Developer ID and notarization.
 
 ---
 
