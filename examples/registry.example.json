@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "researchers": {
+    "abc": {
+      "display_name": "Researcher ABC",
+      "age_public_key": "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqg0example",
+      "active": true
+    },
+    "def": {
+      "display_name": "Researcher DEF",
+      "age_public_key": "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqg0example",
+      "active": true
+    }
+  },
+  "supervisor": {
+    "age_public_key": "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqg0example"
+  },
+  "last_serial": 0,
+  "issued": []
+}

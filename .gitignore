@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+*.age
+!tests/**/*.age
+
+# Local tooling state (pi-smart-router etc.)
+.pi-smart-router/
+
+# OS / editor cruft
+.DS_Store
+.idea/
+.vscode/
+*.swp
