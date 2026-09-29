@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "interview-intake"
+version = "0.1.0"
+description = "Ingest, encrypt, and file interview audio under globally unique serial IDs."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Interview Intake contributors" }]
+keywords = ["age", "encryption", "interview", "nextcloud", "research"]
+dependencies = []
+
+[project.optional-dependencies]
+# Preferred Rust-backed age binding.
+pyrage = ["pyrage>=1.1"]
+# Useful for reading duration from compressed audio containers.
+duration = ["mutagen>=1.45"]
+# Optional drag-and-drop GUI.
+gui = ["tkinterdnd2>=0.3"]
+dev = ["pytest>=7", "pytest-cov>=4", "pyrage>=1.1", "mutagen>=1.45"]
+
+[project.scripts]
+interview-intake = "interview_intake.cli:main"
+
+[project.gui-scripts]
+interview-intake-gui = "interview_intake.gui:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.package-data]
+interview_intake = ["py.typed"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+source = ["interview_intake"]

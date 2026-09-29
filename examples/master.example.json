@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "interviews": {
+    "2026-abc-xyz-0001": {
+      "real_names": ["Jane Doe", "John Smith"],
+      "emails": ["jane@example.org", "john@example.org"],
+      "consent_ref": "consent/2026-04-12-jane-doe.pdf",
+      "date": "2026-04-12",
+      "location": "Berlin",
+      "notes": "Follow-up scheduled."
+    }
+  },
+  "researchers": {
+    "abc": {
+      "real_name": "Alice Brown",
+      "email": "alice@lab.example.org",
+      "start_date": "2025-09-01",
+      "end_date": null
+    }
+  }
+}
