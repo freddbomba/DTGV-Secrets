@@ -158,9 +158,9 @@ Modificati:
 | 1 | Supervisor core + CLI (init, researcher, escrow) + QR | 2–3 gg | ✅ fatto |
 | 2 | File di registrazione + wizard researcher | 1–2 gg | ✅ fatto |
 | 3 | Masterfile + export Excel | 1–2 gg | da fare |
-| 4 | GUI Tk stdlib per entrambi i ruoli | 2–3 gg | da fare |
-| 5 | Packaging macOS/Linux + CI release | 3–5 gg | da fare |
-| 6 | Docs, test hardening | 1–2 gg | in corso |
+| 4 | GUI Tk stdlib per entrambi i ruoli | 2–3 gg | ✅ fatto |
+| 5 | Packaging macOS/Linux + CI release | 3–5 gg | ✅ fatto |
+| 6 | Docs, test hardening | 1–2 gg | ✅ fatto |
 | | **Totale** | **~11–18 gg** | |
 
 ### Phase 1 — consegnato
@@ -189,6 +189,38 @@ Modificati:
 - Scambio simmetrico: `interview-supervisor researcher add --from <registration.json>`.
 - Messaggi del `setup` aggiornati per puntare al nuovo flusso supervisor.
 - `tests/test_researcher_registration.py` (5 nuovi test, suite totale 152).
+
+### Phase 4 — consegnato
+
+- `gui_common.py`: helper puri e testabili headless (`build_config`,
+  `ensure_researcher_key`, `run_researcher_setup`, `build_registration_request`,
+  `write_public_key_qr`, `list_interviews_for`, `resolve_audio_source`,
+  `run_intake`, `decrypt_interview`, `load_verify_summary`).
+- `gui.py`: GUI Tk del ricercatore (Setup / Intake / Open / Registration) con
+  `tkinter` caricato lazy; l'import resta headless-safe e `main()` dà un errore
+  chiaro se Tk o il display non sono disponibili.
+- `supervisor_gui.py`: GUI Tk del supervisore (Init / Researchers / Escrow /
+  Verify), anch'essa import-safe senza Tk.
+- `pyproject.toml`: entry point `interview-supervisor-gui`; extra `gui` (vuoto,
+  Tk è stdlib/OS), `gui-dnd` (`tkinterdnd2`, opzionale), `packaging` (`pyinstaller`).
+- Test: `test_gui_common.py`, `test_gui_researcher_smoke.py`,
+  `test_gui_supervisor_smoke.py` (mock + Tk reale quando c'è un display).
+
+### Phase 5 — consegnato
+
+- `packaging/_spec_common.py` + `interview-intake.spec` /
+  `interview-supervisor.spec`: PyInstaller con `pyrage` + `qrcode`
+  (`tkinterdnd2` se presente), CLI console + GUI windowed, `BUNDLE` `.app` su macOS.
+- `packaging/build_macos.sh`: `.app` via spec, poi `.dmg` con `create-dmg`
+  (fallback `hdiutil`), firma/notarizzazione opzionali via env.
+- `packaging/build_linux.sh`: bundle onedir, `.AppImage` via `appimagetool`,
+  `.deb` via `dpkg-deb`; `packaging/desktop/*.desktop` + icone PNG.
+- `.github/workflows/release.yml`: matrice `macos-latest` + `ubuntu-latest`,
+  Python 3.11, `python3-tk` e `appimagetool` su Linux, esecuzione degli script,
+  upload artifact su tag/`workflow_dispatch`, più un job di test.
+- `tests/test_packaging.py`: controlli statici su script bash, `.desktop`,
+  icone e workflow YAML.
+- `packaging/README.md` e nuove sezioni GUI/packaging nel README principale.
 
 ## 11. Rischi / punti aperti
 

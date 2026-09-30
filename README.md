@@ -22,6 +22,7 @@ places where the spec left an ambiguity.
 - [Install](#install)
 - [macOS setup (Tahoe / macOS 26)](#macos-setup-tahoe--macos-26)
 - [User instructions (step by step)](#user-instructions-step-by-step)
+- [Desktop apps (GUI)](#desktop-apps-gui)
 - [Trust model](#trust-model)
 - [Folder layout](#folder-layout)
 - [Supervisor setup](#supervisor-setup-one-time)
@@ -37,6 +38,7 @@ places where the spec left an ambiguity.
 - [Spec conformance decisions](#spec-conformance-decisions)
 - [Limitations](#limitations)
 - [Pro forma data and Excel export](#pro-forma-data-and-excel-export)
+- [Packaging & releases](#packaging--releases)
 - [Development](#development)
 
 ---
@@ -332,6 +334,37 @@ the detailed reference.
 > **Keys are created only if missing.** Re-running `setup` or `keygen` prints the
 > existing public key instead of replacing it. Use `--force` only to deliberately
 > rotate a key — old interviews stay encrypted to the old key.
+
+---
+
+## Desktop apps (GUI)
+
+Both roles ship an optional Tk GUI. It is a thin layer over the same core; the
+CLI remains fully supported and is the canonical automation path.
+
+```bash
+pip install -e '.[pyrage,duration,qr]'   # Tk itself ships with Python / the OS
+interview-intake-gui                     # researcher app
+interview-supervisor-gui                 # supervisor app
+```
+
+| App | Entry point | What it does |
+|---|---|---|
+| Researcher | `interview-intake-gui` | **Setup** (config + key + registration file/QR), **Intake** (file/folder picker, mnemonic, encrypt), **Open** (list, decrypt, open), **Registration** (export/QR public key). |
+| Supervisor | `interview-supervisor-gui` | **Init** (create project + escrow + registry), **Researchers** (add from key or `registration.json`, activate/deactivate/remove, list), **Escrow** (show public key, backup with QR), **Verify** (integrity + registry checks). |
+
+Notes:
+
+- **Tk is required for the GUI but never for the core.** Importing
+  `interview_intake.gui` / `.supervisor_gui` succeeds even without Tk; launching
+  without Tk or a display prints a clear error and exits non-zero.
+- On Linux install `python3-tk`. The macOS python.org installer bundles Tk;
+  Homebrew users may need `brew install python-tk@3.11`.
+- Drag-and-drop is an *optional* enhancement (`pip install -e '.[gui-dnd]'`).
+  Without `tkinterdnd2` the native file pickers still work.
+- The researcher GUI never creates `registry.json`; only the supervisor app does.
+- Everything is wired through headless-testable helpers in `gui_common.py`, so
+  an absent Tk never breaks imports or the test suite.
 
 ---
 
@@ -773,6 +806,27 @@ Generated `.xlsx` files are git-ignored.
 
 ---
 
+## Packaging & releases
+
+Standalone desktop apps (no `pip` or `venv` for end users) are built from the
+recipes in [`packaging/`](packaging/README.md):
+
+```bash
+pip install -e '.[pyrage,qr,packaging]'   # adds pyinstaller
+
+packaging/build_macos.sh                  # .app bundles + .dmg images
+packaging/build_linux.sh --all            # onedir bundles + .AppImage + .deb
+```
+
+Each bundle contains both the console CLI and the windowed GUI for its role.
+See [`packaging/README.md`](packaging/README.md) for prerequisites, code
+signing / notarization, and troubleshooting. The
+[`.github/workflows/release.yml`](.github/workflows/release.yml) workflow builds
+both platforms on a `v*` tag (or via **Run workflow**) and uploads the
+artifacts.
+
+---
+
 ## Development
 
 ```bash
@@ -803,10 +857,14 @@ src/interview_intake/
 ├── fs.py             # atomic writes, hashing, containment
 ├── media.py          # eject / mount detection
 ├── proforma.py       # pro forma data + Excel export
-└── gui.py            # optional drag-and-drop
+├── gui_common.py     # pure, headless-testable GUI helpers
+├── gui.py            # researcher Tk app (optional drag-and-drop)
+└── supervisor_gui.py # supervisor Tk app
 tests/                # unit + integration tests (fake age backend)
 tests/data/           # 15-record pro forma sample (fictional)
 scripts/              # standalone utilities (pro forma -> xlsx)
+packaging/            # PyInstaller specs + macOS/Linux build scripts
+.github/workflows/    # release.yml (build matrix + artifact upload)
 ```
 
 The test suite uses a deterministic fake backend, so it runs without `pyrage`
