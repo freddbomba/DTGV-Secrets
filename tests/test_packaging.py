@@ -60,6 +60,22 @@ def test_desktop_files_have_required_keys() -> None:
             assert key in text, f"{path.name} is missing {key!r}"
 
 
+def _desktop_value(path: Path, key: str) -> str:
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.startswith(f"{key}="):
+            return line.split("=", 1)[1].strip()
+    raise AssertionError(f"{path.name} has no {key} entry")
+
+
+def test_desktop_icons_exist_and_are_png() -> None:
+    if not DESKTOP_FILES:
+        pytest.skip("no .desktop files yet")
+    for path in DESKTOP_FILES:
+        icon = DESKTOP_DIR / f"{_desktop_value(path, 'Icon')}.png"
+        assert icon.is_file(), f"missing icon {icon.name}"
+        assert icon.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n", f"{icon.name} is not a PNG"
+
+
 def test_release_workflow_uses_build_scripts() -> None:
     if not WORKFLOW.exists():
         pytest.skip("no release workflow yet")

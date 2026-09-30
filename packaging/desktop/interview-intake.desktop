@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Interview Intake
+GenericName=Interview audio intake
+Comment=Encrypt and file interview audio under unique serial IDs
+Exec=interview-intake-gui
+TryExec=interview-intake-gui
+Icon=interview-intake
+Terminal=false
+Categories=Utility;Office;Audio;
+Keywords=interview;audio;encryption;age;intake;
+MimeType=audio/wav;audio/mpeg;audio/mp4;audio/flac;
+StartupNotify=true

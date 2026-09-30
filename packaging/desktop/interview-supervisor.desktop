@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Interview Supervisor
+GenericName=Interview project supervisor
+Comment=Provision the project registry, manage researchers and back up escrow keys
+Exec=interview-supervisor-gui
+TryExec=interview-supervisor-gui
+Icon=interview-supervisor
+Terminal=false
+Categories=Utility;Office;
+Keywords=interview;registry;escrow;age;supervisor;
+StartupNotify=true
