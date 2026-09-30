@@ -18,6 +18,9 @@ htmlcov/
 # Local tooling state (pi-smart-router etc.)
 .pi-smart-router/
 
+# Ralph loop scratchpad/state
+.ralph/
+
 # OS / editor cruft
 .DS_Store
 .idea/
