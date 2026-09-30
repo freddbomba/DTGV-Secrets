@@ -123,11 +123,19 @@ dist/Interview Supervisor/ ...
 ```
 
 The AppImage is assembled manually: an AppDir is populated with the frozen
-bundle plus `AppRun`, a `.desktop` entry and an icon from `desktop/`, then
+bundle plus `AppRun`, a `.desktop` entry and an icon from `icons/`, then
 `appimagetool` packs it. `linuxdeploy` is *not* required. `.deb` packages are
 built with `dpkg-deb --build --root-owner-group`.
 
 ## Running the frozen apps
+
+The `dist/*.AppImage` files are self-contained: run (or double-click) them and
+the GUI starts with the same configuration and key locations as the `pip`
+install. The screenshots below are the actual frozen binaries on Linux.
+
+| Researcher AppImage | Supervisor AppImage |
+|---|---|
+| ![Interview Intake AppImage running](../docs/images/packaging-appimage-researcher.png) | ![Interview Supervisor AppImage running](../docs/images/packaging-appimage-supervisor.png) |
 
 The GUIs still read `~/.config/interview-intake/config.json`; freezing changes
 nothing about config or key locations (see the main README). The bundled
