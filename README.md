@@ -1,963 +1,118 @@
 # Interview Intake App
 
-A small utility that ingests interview audio from an SD card, encrypts it
-client-side with [`age`](https://age-encryption.org), and files it in a shared
-Nextcloud project folder under a globally unique, sequentially numbered
-interview ID. It also scaffolds the `transcript.md` / `note.md` files the
-researcher fills in later.
+A small CLI + desktop tool for research interviews:
 
-**It does not** transcribe, read the supervisor's masterfile, manage identity
+1. **Ingests** interview audio from an SD card.
+2. **Encrypts it end-to-end** with [`age`](https://age-encryption.org).
+3. **Files it** in a shared Nextcloud project folder under a globally unique,
+   sequential interview ID (`2026-abc-xyz-0001`).
+4. **Scaffolds** the `transcript.md` / `note.md` files you fill in later.
+
+It does **not** transcribe, read the supervisor's masterfile, manage identity
 mapping, or sync Nextcloud.
 
-This is an implementation of the "Interview Intake App" specification v0.1.
-The contracts in spec sections 4 (filename grammar), 5 (`registry.json`),
-7 (`meta.json`), 9 (encryption) and 10 (allocation) are implemented verbatim.
-See [Spec conformance decisions](#spec-conformance-decisions) for the few
-places where the spec left an ambiguity.
+## The two roles
 
----
-
-## Contents
-
-- [Install](#install)
-- [macOS setup (Tahoe / macOS 26)](#macos-setup-tahoe--macos-26)
-- [User instructions (step by step)](#user-instructions-step-by-step)
-- [Desktop apps (GUI)](#desktop-apps-gui)
-- [Trust model](#trust-model)
-- [Folder layout](#folder-layout)
-- [Supervisor setup](#supervisor-setup-one-time)
-- [Supervisor App (registry & escrow)](#supervisor-app-registry--escrow)
-- [Researcher setup](#researcher-setup-once-per-machine)
-- [Daily use: intake](#daily-use-intake)
-- [Opening and decrypting](#opening-and-decrypting)
-- [Verifying a project](#verifying-a-project)
-- [Key generation](#key-generation)
-- [Templates](#templates)
-- [Security properties](#security-properties)
-- [Whisper safety notes](#whisper-safety-notes)
-- [Spec conformance decisions](#spec-conformance-decisions)
-- [Limitations](#limitations)
-- [Pro forma data and Excel export](#pro-forma-data-and-excel-export)
-- [Packaging & releases](#packaging--releases)
-- [Development](#development)
-
----
-
-## Install
-
-Requires Python 3.11+.
-
-Preferred (Rust-backed `pyrage`):
-
-```bash
-python -m venv .venv
-. .venv/bin/activate
-pip install -e '.[pyrage,duration]'
-```
-
-Fallback (uses the `age` CLI instead of `pyrage`):
-
-```bash
-pip install .
-# plus: apt install age   /   brew install age
-```
-
-Optional extras:
-
-| Extra | Purpose |
-|---|---|
-| `pyrage` | Preferred age binding (no CLI needed). |
-| `duration` | `mutagen`, used to read duration from mp3/m4a/flac. WAV duration uses the stdlib. |
-| `gui` | GUI shell. Tk ships with Python / the OS, so this installs nothing. |
-| `gui-dnd` | `tkinterdnd2`, optional drag-and-drop for the GUIs. |
-| `qr` | `qrcode`, for terminal/SVG/PNG QR codes (key exchange and backup). |
-| `packaging` | `pyinstaller`, to build standalone desktop apps. |
-| `dev` | `pytest`, `pyrage`, `mutagen`. |
-
-Check which backend is available:
-
-```bash
-interview-intake --help
-interview-intake config show   # prints "Available age backends"
-```
-
----
-
-## macOS setup (Tahoe / macOS 26)
-
-For macOS 26 "Tahoe" (including 26.6), on both Apple Silicon and Intel. The app
-needs Python **3.11 or newer**; these steps install 3.11. Any 3.12/3.13 also
-works.
-
-### 1. Open Terminal
-
-- Press `⌘ + Space`, type `Terminal`, and press Return, **or**
-- open **Finder → Applications → Utilities → Terminal**.
-
-### 2. Check for Python
-
-```bash
-python3 --version
-```
-
-If it prints `Python 3.11.x` or newer, skip to
-[step 4](#4-create-the-app-environment). Do not rely on the bare system
-`/usr/bin/python3` stub; install a real 3.11.
-
-### 3. Install Python 3.11
-
-#### Option A — Homebrew (recommended)
-
-1. Install the Xcode command-line tools (needed by Homebrew):
-
-   ```bash
-   xcode-select --install
-   ```
-
-2. Install Homebrew (skip if `brew --version` already works):
-
-   ```bash
-   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-   ```
-
-   On Apple Silicon, add Homebrew to the current shell as the installer asks:
-
-   ```bash
-   eval "$(/opt/homebrew/bin/brew shellenv)"
-   ```
-
-3. Install Python 3.11 (and Tk if you want the optional drag-and-drop GUI):
-
-   ```bash
-   brew install python@3.11
-   brew install python-tk@3.11      # optional, for the GUI
-   ```
-
-4. Confirm the interpreter:
-
-   ```bash
-   "$(brew --prefix python@3.11)/bin/python3.11" --version
-   ```
-
-#### Option B — python.org installer (no Homebrew; bundles Tk)
-
-1. In a browser, open <https://www.python.org/downloads/macos/> and download the
-   latest **Python 3.11.x macOS 64-bit universal2 installer**.
-2. Open the downloaded `.pkg`, click through the installer, and enter your
-   password when prompted.
-3. Confirm the interpreter:
-
-   ```bash
-   python3.11 --version
-   ```
-
-> If `python@3.11` is no longer offered by Homebrew, use `python@3.12` (or newer)
-> instead — the app supports 3.11 and up.
-
-### 4. Create the app environment
-
-From the project folder (use `cd` to go wherever you cloned `DTGV-Secrets`):
-
-```bash
-# Homebrew (Option A) — explicit path works even if python3.11 is not on PATH:
-PYTHON="$(brew --prefix python@3.11)/bin/python3.11"
-
-# python.org (Option B):
-# PYTHON=python3.11
-
-"$PYTHON" -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-pip install -e '.[pyrage,duration]'
-```
-
-Then check it:
-
-```bash
-python --version
-interview-intake --help
-```
-
-### 5. First run
-
-```bash
-interview-intake setup --researcher-id abc \
-  --project-path ~/Nextcloud/project \
-  --sync-root   ~/Nextcloud \
-  --install-templates
-```
-
-See [User instructions (step by step)](#user-instructions-step-by-step) for the
-rest of the workflow.
-
-### macOS notes
-
-- **Backends.** `pyrage` installs as a prebuilt wheel on Apple Silicon and Intel,
-  so no compiler is required. To use the `age` CLI instead: `brew install age`.
-- **GUI / drag-and-drop.** Requires Tkinter (bundled by the python.org installer,
-  or `python-tk@3.11` with Homebrew) plus `pip install -e '.[gui]'`. Without it,
-  the CLI works exactly as documented and is the supported path.
-- **SD cards** mount under `/Volumes/<NAME>`. Quote the path if it contains
-  spaces:
-
-  ```bash
-  interview-intake intake "/Volumes/NO NAME/REC_0042.wav" -m xyz
-  ```
-
-- **Gatekeeper.** Installing with `pip` needs no signing or notarization. Only a
-  packaged `.app` would require a Developer ID and notarization.
-
----
-
-## User instructions (step by step)
-
-This is the practical walkthrough for the two roles. The sections after it are
-the detailed reference.
-
-### A. Supervisor — set up the project once
-
-1. **Create the shared folder** in Nextcloud, e.g. `~/Nextcloud/project`.
-
-2. **Create the escrow key** on the supervisor's machine (keep it off researcher
-   machines — it can decrypt every interview):
-
-   ```bash
-   interview-intake keygen --out ~/.config/interview-intake/keys --name supervisor
-   ```
-
-   (Alternatively `interview-intake setup --create-escrow` creates it alongside a
-   config.) Copy the printed `Public key` (`age1...`).
-
-3. **Create `registry.json`** in the shared folder. The app **never creates or
-   edits this file** (spec section 15). Start from
-   [`examples/registry.example.json`](examples/registry.example.json) and put the
-   escrow public key in `supervisor`:
-
-   ```json
-   {
-     "schema_version": 1,
-     "researchers": {},
-     "supervisor": { "age_public_key": "age1...<escrow>" },
-     "last_serial": 0,
-     "issued": []
-   }
-   ```
-
-4. **Register each researcher.** When a researcher sends you their public key,
-   add an entry under `researchers`:
-
-   ```json
-   "abc": { "display_name": "Researcher ABC", "age_public_key": "age1...<theirs>", "active": true }
-   ```
-
-5. **Back up the escrow key** (paper copy + offline encrypted copy). It is the
-   durable access path if a researcher leaves.
-
-### B. Researcher — set up this machine once
-
-1. **Install** the app (see [Install](#install)).
-
-2. **First run** — `setup` creates the config and a private key *if missing* and
-   never overwrites an existing key:
-
-   ```bash
-   interview-intake setup \
-     --researcher-id abc \
-     --project-path ~/Nextcloud/project \
-     --sync-root   ~/Nextcloud \
-     --install-templates
-   ```
-
-   It writes `~/.config/interview-intake/config.json` and a **registration
-   request** at `~/.config/interview-intake/registration/<id>.pub.json`,
-   containing your public key. Send that file (or the printed public key) to the
-   supervisor, who registers it with
-   `interview-supervisor researcher add --from <file>`.
-
-3. **Wait until the supervisor confirms** your key is in `registry.json`.
-
-4. **Check the wiring:**
-
-   ```bash
-   interview-intake config show
-   interview-intake open --list
-   ```
-
-### C. Researcher — ingest an interview
-
-1. Plug in the SD card.
-2. Run intake:
-
-   ```bash
-   interview-intake intake /media/SDCARD/REC_0042.wav -m xyz
-   ```
-
-   - `-m xyz` is a 3-letter mnemonic you choose (reserved words are rejected).
-   - Add `--yes` for a non-interactive run.
-   - Add `--wipe --eject` to erase the source and eject the card afterwards.
-3. The app prints the new interview ID, e.g. `2026-abc-xyz-0001`, and writes
-   `audio.age`, `meta.json`, `transcript.md`, `note.md` into the shared folder.
-4. After transcribing, edit `transcript.md` / `note.md` in Nextcloud.
-
-### D. Researcher — open (decrypt) an interview
-
-1. List interviews: `interview-intake open --list`
-2. Decrypt and play:
-
-   ```bash
-   interview-intake open 2026-abc-xyz-0001
-   ```
-
-   or write it somewhere specific without launching a player:
-
-   ```bash
-   interview-intake open 2026-abc-xyz-0001 -o ~/tmp/iv.wav --no-open
-   ```
-
-3. **Delete the decrypted file when done.** The app refuses to decrypt into the
-   Nextcloud sync folder.
-
-### Quick command reference
-
-| Task | Command |
-|---|---|
-| First-run setup (researcher) | `interview-intake setup --researcher-id abc --project-path P --sync-root S` |
-| Show/export registration request | `interview-intake registration [--out FILE] [--qr] [--qr-out FILE]` |
-| Add escrow key (supervisor) | `interview-intake setup --create-escrow` (or `keygen --name supervisor`) |
-| Show config / backends | `interview-intake config show` |
-| Ingest audio | `interview-intake intake <file-or-dir> -m <bbb>` |
-| List interviews | `interview-intake open --list` |
-| Decrypt one | `interview-intake open <id> [-o path] [--no-open]` |
-| Check integrity | `interview-intake verify` |
-| Seed templates | `interview-intake templates --overwrite` |
-
-> **Keys are created only if missing.** Re-running `setup` or `keygen` prints the
-> existing public key instead of replacing it. Use `--force` only to deliberately
-> rotate a key — old interviews stay encrypted to the old key.
-
----
-
-## Desktop apps (GUI)
-
-Both roles ship an optional Tk GUI. It is a thin layer over the same core; the
-CLI remains fully supported and is the canonical automation path.
-
-```bash
-pip install -e '.[pyrage,duration,qr]'   # Tk itself ships with Python / the OS
-interview-intake-gui                     # researcher app
-interview-supervisor-gui                 # supervisor app
-```
-
-| App | Entry point | Tabs |
+| Role | Responsible for | Key it holds |
 |---|---|---|
-| Researcher | `interview-intake-gui` | **Setup** (config + key + registration file/QR), **Intake** (file/folder picker, mnemonic, encrypt), **Open** (list, decrypt, open), **Registration** (export/QR public key). |
-| Supervisor | `interview-supervisor-gui` | **Init** (create project + escrow + registry), **Researchers** (add from key or `registration.json`, activate/deactivate/remove, list), **Escrow** (show public key, backup with QR), **Verify** (integrity + registry checks). |
+| **Researcher** | Setting up their machine, ingesting audio, decrypting their own interviews. | Own private key. |
+| **Supervisor** | Provisioning the project (`registry.json`), registering researchers, escrow backup. | Escrow key that can recover **every** interview. |
 
-### Researcher app — example walkthrough
+Every interview is encrypted to **both** the researcher and the supervisor.
+The Researcher app never creates `registry.json`; only the Supervisor app does.
 
-| Setup | Intake |
-|---|---|
-| ![Researcher Setup](docs/images/gui-researcher-setup.png) | ![Researcher Intake](docs/images/gui-researcher-intake.png) |
-| **Open** | **Registration** |
-| ![Researcher Open](docs/images/gui-researcher-open.png) | ![Researcher Registration](docs/images/gui-researcher-registration.png) |
+## Quick start (5 minutes)
 
-1. **Setup** — fill in the config path (default `~/.config/interview-intake/config.json`),
-   researcher ID (`abc`), project folder, sync root, private key path and a
-   display name, then click **Create config & key**.
-   This writes `config.json`, generates the age key **only if it does not exist
-   yet**, and writes `registration/abc.pub.json`. The public key then shows up
-   on the **Registration** tab.
-
-   ```bash
-   # CLI equivalent
-   interview-intake setup --researcher-id abc \
-     --project-path ~/Nextcloud/DTGV/project \
-     --sync-root ~/Nextcloud/DTGV \
-     --display-name "Researcher ABC"
-   ```
-
-2. **Registration** — click **Refresh** to load the key, then **Export JSON** to
-   send `abc.pub.json` to the supervisor, or **Export QR** for an offline/paper
-   handover.
-
-   ```bash
-   interview-intake registration --qr --qr-out registration/abc.svg
-   ```
-
-3. **Intake** — pick the audio file or folder, type the 3-letter mnemonic
-   (`foo`), click **Run intake**. The status bar shows the new ID
-   (`2026-abc-foo-0001`).
-
-   ```bash
-   interview-intake intake /media/abc/SDCARD/REC_0001.wav -m foo
-   ```
-
-4. **Open** — click **List** to fill the interview list, select an ID (optionally
-   an output path) and **Decrypt**. The plaintext is opened with the OS player.
-
-   ```bash
-   interview-intake open --list
-   interview-intake open 2026-abc-foo-0001
-   ```
-
-### Supervisor app — example walkthrough
-
-| Init | Researchers |
-|---|---|
-| ![Supervisor Init](docs/images/gui-supervisor-init.png) | ![Supervisor Researchers](docs/images/gui-supervisor-researchers.png) |
-| **Escrow** | **Verify** |
-| ![Supervisor Escrow](docs/images/gui-supervisor-escrow.png) | ![Supervisor Verify](docs/images/gui-supervisor-verify.png) |
-
-1. **Init** — choose the shared project folder, keep *Create escrow key* and
-   *Install default templates* checked, click **Initialise project**. This owns
-   `registry.json` (the researcher side never creates it).
-
-   ```bash
-   interview-supervisor init -p ~/Nextcloud/DTGV/project
-   ```
-
-2. **Researchers** — point *Registration file* at the researcher's
-   `abc.pub.json` and click **Add** (or fill *Researcher ID* + *Public key*).
-   **Activate** / **Deactivate** / **Remove** manage lifecycle; **Refresh**
-   lists everyone with interview counts.
-
-   ```bash
-   interview-supervisor researcher add --from ~/Downloads/abc.pub.json
-   interview-supervisor researcher list
-   ```
-
-3. **Escrow** — **Show public key** prints it; **Backup (key + QR)** writes the
-   private escrow key plus public/secret QR images for a safe offline copy.
-
-   ```bash
-   interview-supervisor escrow backup --out ~/escrow-backup
-   ```
-
-4. **Verify** — **Verify project** prints the integrity report (files, hashes,
-   registry consistency).
-
-   ```bash
-   interview-supervisor verify -p ~/Nextcloud/DTGV/project
-   ```
-
-### GUI notes
-
-- **Tk is required for the GUI but never for the core.** Importing
-  `interview_intake.gui` / `.supervisor_gui` succeeds even without Tk; launching
-  without Tk or a display prints a clear error and exits non-zero.
-- On Linux install `python3-tk`. The macOS python.org installer bundles Tk;
-  Homebrew users may need `brew install python-tk@3.11`.
-- Drag-and-drop is an *optional* enhancement (`pip install -e '.[gui-dnd]'`).
-  Without `tkinterdnd2` the native file pickers still work.
-- The researcher GUI never creates `registry.json`; only the supervisor app does.
-- Keys are only created if missing, so re-running **Create config & key** is safe.
-  To deliberately *rotate* a key, use the CLI with `--force`.
-- Everything is wired through headless-testable helpers in `gui_common.py`, so
-  an absent Tk never breaks imports or the test suite.
-- The screenshots above are generated with
-  `python scripts/capture_gui_screenshots.py` (needs an X display, `tkinter` and
-  ImageMagick `import` or `xwd` + `convert`).
-
----
-
-## Trust model
-
-| Role | Access |
-|---|---|
-| **Researcher** | Shared Nextcloud project folder. Own private key. Can encrypt and decrypt their own interviews. |
-| **Supervisor** | Shared project folder + private masterfile. Holds the escrow private key that decrypts all interviews. |
-
-Researchers are assumed honest but fallible. The supervisor's machine is
-trusted. Nextcloud is trusted for storage/availability but **not**
-confidentiality. The SD card is untrusted after use. The app does **not** defend
-against endpoint compromise, key theft or coercion.
-
----
-
-## Folder layout
-
-Shared project folder (Nextcloud):
-
-```
-project/
-├── registry.json
-├── registry.lock                 # transient
-├── templates/
-│   ├── transcript_template.md
-│   └── note_template.md
-└── interviews/
-    └── 2026-abc-xyz-0001/
-        ├── audio.age
-        ├── transcript.md
-        ├── note.md
-        └── meta.json
-```
-
-Supervisor-only (never on researcher machines):
-
-```
-supervisor/
-├── master.json                   # encrypted at rest, e.g. git-crypt
-├── supervisor_key.age            # private key
-└── backups/
-```
-
-Researcher local (never synced):
-
-```
-~/.config/interview-intake/
-├── config.json
-└── keys/<researcher_id>.key      # chmod 600
-```
-
-Interview ID grammar (`^[0-9]{4}-[a-z]{3}-[a-z]{3}-[0-9]{4}$`):
-
-| Field | Rule |
-|---|---|
-| `YYYY` | Interview year, from the system clock at intake. |
-| `AAA` | Researcher ID, 3 lowercase letters, from `config.json`. |
-| `BBB` | Mnemonic, 3 lowercase letters, entered at intake. |
-| `NNNN` | Global serial, 4 digits, allocated by the app. |
-
-Everything is lowercased; uppercase input is normalised. Reserved mnemonics
-(`key`, `tmp`, `new`, `old`, `aux`, `con`, `prn`, `nul`) are rejected.
-
----
-
-## Supervisor App (registry & escrow)
-
-The `interview-supervisor` command provisions and maintains the shared project,
-including `registry.json`. Per the 2026-09 role split, the **Supervisor App owns
-`registry.json`** (creates and manages it); the **Researcher App never creates
-it** — it only reads it and appends allocation records.
-
-One-time setup, in one command:
-
-```bash
-interview-supervisor init -p ~/Nextcloud/project \
-  --escrow-key ~/.config/interview-intake/keys/supervisor.key
-```
-
-This creates `interviews/` and `templates/`, generates the escrow key, and writes
-a valid `registry.json`. It is idempotent: an existing registry is kept. Use
-`--force` only to deliberately regenerate the escrow key and rewrite the registry
-(destructive).
-
-Register a researcher without hand-editing JSON:
-
-```bash
-# from a pasted public key
-interview-supervisor researcher add abc --name "Researcher ABC" --key age1...
-
-# or from the researcher's registration.json
-interview-supervisor researcher add --from ~/Downloads/abc.pub.json
-
-interview-supervisor researcher list
-interview-supervisor researcher deactivate abc   # keep history, block new use
-interview-supervisor researcher remove abc       # refused if interviews exist
-```
-
-Escrow key backup, with QR codes for offline/paper storage:
-
-```bash
-interview-supervisor escrow show --qr
-interview-supervisor escrow backup --out ~/escrow-backup
-# writes escrow-*.key (0600), escrow-public-*.svg, escrow-secret-*.svg (0600), README
-```
-
-`verify` additionally reports registry-level issues (duplicate public keys,
-inactive researchers with issued interviews, interviews for unknown
-researchers):
-
-```bash
-interview-supervisor verify -p ~/Nextcloud/project
-```
-
-> QR output needs the optional `qrcode` package: `pip install -e '.[qr]'`.
-> The legacy manual `registry.json` flow below still works, but the Supervisor
-> App is now the supported path.
-
----
-
-## Supervisor setup (one time)
-
-1. **Create the shared folder** and a `registry.json` with the strict schema
-   from spec section 5:
-
-   ```json
-   {
-     "schema_version": 1,
-     "researchers": {
-       "abc": {
-         "display_name": "Researcher ABC",
-         "age_public_key": "age1...",
-         "active": true
-       }
-     },
-     "supervisor": { "age_public_key": "age1..." },
-     "last_serial": 0,
-     "issued": []
-   }
-   ```
-
-   See [`examples/registry.example.json`](examples/registry.example.json).
-   The placeholder keys in the example must be replaced with real ones from
-   `keygen` / `age-keygen`.
-
-   The app **never creates or repairs** `registry.json`. It only re-reads and
-   appends to it. A missing or malformed registry is a hard error.
-
-2. **Add each researcher's age public key** to `researchers`. The supervisor's
-   escrow public key goes in `supervisor`. Every interview is encrypted to both
-   the researcher and the supervisor.
-
-3. Keep the supervisor private key off researcher machines. It is the durable
-   access path if a researcher leaves (old interviews are **not** re-encrypted).
-
----
-
-## Researcher setup (once per machine)
-
-`setup` is the first-run command. It creates whatever is missing (config and
-keys), never overwrites an existing key, and prints the public key to send to the
-supervisor:
-
-```bash
-interview-intake setup \
-  --researcher-id abc \
-  --project-path ~/Nextcloud/project \
-  --sync-root   ~/Nextcloud \
-  --install-templates
-```
-
-It writes `~/.config/interview-intake/config.json` and
-`~/.config/interview-intake/keys/abc.key` (mode `0600`), seeds the shared
-templates, and prints a ready-to-paste `registry.json` snippet. **It never
-creates `registry.json`** — the supervisor provisions that (spec section 15).
-
-On the **supervisor's** machine only, add `--create-escrow` to also generate the
-escrow key (default `~/.config/interview-intake/keys/supervisor.key`):
-
-```bash
-interview-intake setup --create-escrow
-```
-
-Re-running `setup` is safe: existing keys are reused and their public keys are
-re-derived, not regenerated. Pass `--force` to deliberately rotate a key
-(dangerous — old interviews stay encrypted to the old key).
-
-The lower-level `config init --generate-key` still works and is now also
-idempotent.
-
-`sync_root` must be a prefix of `project_path`; this is enforced. It is used to
-refuse decryption into the synced tree.
-
-Config schema (spec section 14):
-
-```json
-{
-  "schema_version": 1,
-  "researcher_id": "abc",
-  "private_key_path": "~/.config/interview-intake/keys/abc.key",
-  "project_path": "~/Nextcloud/project",
-  "sync_root": "~/Nextcloud",
-  "sync_wait_seconds": 3,
-  "lock_stale_seconds": 60
-}
-```
-
-`config show` prints the current config; `--config PATH` overrides the location
-(or set `INTERVIEW_INTAKE_CONFIG`).
-
----
-
-## Daily use: intake
-
-```bash
-# One file, non-interactive:
-interview-intake intake /media/SDCARD/REC_0042.wav -m xyz --yes
-
-# A whole SD card; the app scans for *.wav/*.mp3/*.m4a/*.flac and prompts:
-interview-intake intake /media/SDCARD -m xyz
-
-# Then wipe the source and eject the card:
-interview-intake intake /media/SDCARD/REC_0042.wav -m xyz --yes --wipe --eject
-```
-
-Workflow (spec section 11): validate config and recipients → scan/select audio
-→ validate mnemonic → allocate serial → create folder → encrypt (streaming, no
-plaintext to disk) → verify ciphertext on disk → write `meta.json` → render
-`transcript.md` / `note.md` → re-read the registry to confirm the ID.
-
-If encryption/meta/template writing fails, the partial `audio.age` is deleted
-and a `FAILED` marker is left in the interview folder. The serial is already
-committed (by design), so it becomes a **phantom serial** that the supervisor
-reconciles with `interview-intake verify`.
-
-Drag-and-drop is optional. Without `tkinterdnd2` (or without Tkinter at all),
-use the CLI:
-
-```bash
-interview-intake intake /media/SDCARD/REC_0042.wav -m xyz
-```
-
----
-
-## Opening and decrypting
-
-```bash
-interview-intake open --list
-interview-intake open 2026-abc-xyz-0001                  # decrypt to ~/tmp/ + open player
-interview-intake open 2026-abc-xyz-0001 -o ~/tmp/iv.wav --no-open
-```
-
-The default output is `~/tmp/<interview_id>.<format>` in a `0700` directory,
-written `0600`. The app **refuses** any output path inside `sync_root`. It warns
-if the destination directory is world-readable. Existing outputs are not
-overwritten unless `--force`.
-
-After transcription, delete the decrypted plaintext.
-
----
-
-## Verifying a project
-
-```bash
-interview-intake verify
-```
-
-Without decrypting, this checks the registry, every issued interview folder,
-`meta.json`, and that each `audio.age` matches the size and SHA-256 recorded in
-`meta.json`. It also reports folder/registry mismatches and `FAILED` markers.
-
----
-
-## Key generation
-
-```bash
-interview-intake keygen --out ~/.config/interview-intake/keys --name abc
-interview-intake keygen --out ~/.config/interview-intake/keys --name supervisor
-```
-
-Generates an age X25519 keypair (or reuses the existing one and prints its
-public key) and writes the identity (`0600`). Give the public key to the
-supervisor to add to `registry.json`. The app never edits the registry for you.
-
-The full first-run flow is:
-
-1. Researcher runs `setup` → gets a public key.
-2. Researcher sends that public key to the supervisor.
-3. Supervisor runs `setup --create-escrow` (their machine) and/or pastes both
-   public keys into `registry.json`.
-
-Only the supervisor's machine should ever hold the escrow identity.
-
----
-
-## Templates
-
-The shared templates live in `<project>/templates/`. If absent, bundled defaults
-are used. Re-seed with:
-
-```bash
-interview-intake templates --overwrite
-```
-
-Templates use `{{interview_id}}`, `{{date}}`, `{{researcher_id}}`,
-`{{mnemonic}}` placeholders. Unknown placeholders are an error.
-
----
-
-## Security properties
-
-- **No plaintext on disk during intake.** The `pyrage` backend reads the file
-  into a `bytearray`, zeroes it after use, and writes only ciphertext (via a
-  same-directory temp + `os.replace`). The `age` CLI backend pipes the source
-  through stdin in a single pass, hashing as it streams.
-- **Two recipients.** Each interview is encrypted to the researcher *and* the
-  supervisor, read from `registry.json`, never hardcoded.
-- **Integrity before commit.** The encrypted file on disk is re-hashed and must
-  match the value captured while writing before `meta.json` is recorded.
-- **Sync-root refusal.** Decryption into `sync_root` is refused, comparing
-  resolved paths so symlinks cannot bypass the check.
-- **Private key perms.** The config validator refuses a group/world-accessible
-  private key.
-
-> Note: the exact plaintext size can be inferred from the age container, but
-> contents are confidential. Metadata (`meta.json`) contains no PII.
-
----
-
-## Whisper safety notes
-
-Transcription is researcher-driven, so the app cannot enforce these. They are
-also embedded in the transcript template's `SAFETY REMINDERS` block.
-
-- **TMPDIR.** Set `TMPDIR` to a directory outside the Nextcloud sync root before
-  running Whisper, and wipe that directory afterwards:
-  ```bash
-  export TMPDIR=~/tmp/whisper-$$
-  mkdir -p "$TMPDIR" && chmod 700 "$TMPDIR"
-  whisper ... ; rm -rf "$TMPDIR"
-  ```
-- **Known issue.** Whisper's Python `transcribe()` can write temp audio files to
-  the system temp dir and does not always clean them up on failure. Verify with
-  `ls -la "$TMPDIR"` after every run.
-- **Model cache.** Whisper caches model weights in `~/.cache/whisper`
-  (Linux/macOS) or `%USERPROFILE%\.cache\whisper` (Windows). This is model data,
-  not interview data, and can be left in place.
-- **Output location.** Write the transcript directly into
-  `project/interviews/<interview_id>/transcript.md`. Do not write it elsewhere
-  and move it later.
-- **Never decrypt into the synced folder.** Decrypt to `~/tmp/`, transcribe,
-  then delete the plaintext audio.
-
----
-
-## Spec conformance decisions
-
-Ambiguities in the spec and how this implementation resolves them:
-
-1. **`meta.json` `size_bytes`** (spec section 7) is the size of the stored
-   encrypted `audio.age`, so `verify` can check it against the on-disk file.
-   `original_*` fields describe the source.
-2. **Registry commit vs. encryption order.** The reserve-then-commit algorithm
-   (section 10) commits `last_serial` and `issued` *before* encryption, because
-   that is the order in section 11. A failed encryption therefore consumes a
-   serial; this "phantom serial" is left with a `FAILED` marker for the
-   supervisor. The integrity check in section 7 runs before `meta.json` is
-   written.
-3. **Decryption output extension** is taken from `meta.json`'s
-   `audio.format`, defaulting to `.wav` (spec section 12 shows `.wav`).
-4. **Interview folder permissions** respect the umask rather than forcing
-   `0700`, so the shared Nextcloud folder keeps working.
-5. **`age` CLI fallback for decryption** refuses to overwrite existing output;
-   pass `--force` to replace.
-6. **Stale lock** older than `lock_stale_seconds` is removed at the start of
-   each allocation attempt, as suggested in section 10.
-
----
-
-## Limitations
-
-- **Drag-and-drop** needs `tkinterdnd2` *and* Tkinter; both are optional. The
-  CLI is the supported path.
-- **Windows** support is best-effort: paths, `os.replace`, eject, and Tkinter
-  need testing. `age` and Python themselves are fine.
-- **SD wipe** (`--wipe`) is a best-effort overwrite. On flash/CoW storage it is
-  not a guaranteed erasure; treat used SD cards as sensitive.
-- **Serial exhaustion** at `NNNN > 9999` aborts with a manual-intervention
-  message, pending the open "add a zero" policy decision.
-- **No re-encryption on key rotation.** Documented above; escrow key is the
-  durable path.
-
----
-
-## Pro forma data and Excel export
-
-`tests/data/pro_forma_interviews.json` holds **15 fictional interview records** —
-a pro forma used for testing and for producing tracking spreadsheets. It
-contains no real PII.
-
-Convert it to an Excel workbook with the utility script:
-
-```bash
-# install the optional Excel dependency once
-pip install -e '.[excel]'
-
-# standalone script (works without installing the package)
-python scripts/pro_forma_to_excel.py \
-  --input tests/data/pro_forma_interviews.json \
-  --output pro_forma_interviews.xlsx
-
-# or the installed console command
-pro-forma-to-excel -i tests/data/pro_forma_interviews.json -o pro_forma.xlsx
-```
-
-The workbook has one row per interview, with a bold frozen header row and an
-auto-filter. Columns: Interview ID, Date, Researcher, Mnemonic, Location,
-Language, Participants, Duration (s), Source file, Format, Size (bytes),
-Transcription, Consent ref, Notes.
-
-Fields per record:
-
-| Field | Meaning |
-|---|---|
-| `interview_id` | Canonical ID (`YYYY-aaa-bbb-NNNN`). |
-| `date` | Interview date. |
-| `researcher_id` / `mnemonic` | ID components. |
-| `location` / `language` | Free text. |
-| `participants` | Number of speakers. |
-| `duration_seconds` | Recording length. |
-| `original_filename` / `format` / `size_bytes` | Source audio details. |
-| `transcription_status` | e.g. `pending`, `transcribed`, `in_review`. |
-| `consent_ref` | Path/ID of the consent document. |
-| `notes` | Free text. |
-
-Generated `.xlsx` files are git-ignored.
-
----
-
-## Packaging & releases
-
-Standalone desktop apps (no `pip` or `venv` for end users) are built from the
-recipes in [`packaging/`](packaging/README.md):
-
-```bash
-pip install -e '.[pyrage,qr,packaging]'   # adds pyinstaller
-
-packaging/build_macos.sh                  # .app bundles + .dmg images
-packaging/build_linux.sh --all            # onedir bundles + .AppImage + .deb
-```
-
-Each bundle contains both the console CLI and the windowed GUI for its role.
-See [`packaging/README.md`](packaging/README.md) for prerequisites, code
-signing / notarization, and troubleshooting. The
-[`.github/workflows/release.yml`](.github/workflows/release.yml) workflow builds
-both platforms on a `v*` tag (or via **Run workflow**) and uploads the
-artifacts.
-
----
-
-## Development
+Install first — see **[INSTALL.md](INSTALL.md)**. Short version:
 
 ```bash
 python -m venv .venv && . .venv/bin/activate
-pip install -e '.[dev]'
-pytest -q
+pip install -e '.[pyrage,duration,qr]'
 ```
 
-Layout:
+Then, once per project:
 
-```
-src/interview_intake/
-├── cli.py            # researcher CLI entry points
-├── supervisor_cli.py # supervisor CLI entry points (interview-supervisor)
-├── supervisor.py     # supervisor core: registry provisioning + escrow + QR backup
-├── registration.py   # registration.json public-key exchange document
-├── qr.py             # QR rendering (terminal/SVG/PNG), optional qrcode
-├── config.py         # ~/.config/interview-intake/config.json
-├── models.py         # registry/meta/config dataclasses + validation
-├── id_grammar.py     # section 4 grammar
-├── allocation.py     # section 10 reserve-then-commit
-├── registry.py       # section 5 load/save
-├── crypto.py         # section 9 pyrage + age CLI backends
-├── intake.py         # section 11 workflow
-├── open_interview.py # section 12 decryption helper
-├── templates.py      # section 8 markdown templates
-├── verify.py         # integrity checks
-├── fs.py             # atomic writes, hashing, containment
-├── media.py          # eject / mount detection
-├── proforma.py       # pro forma data + Excel export
-├── gui_common.py     # pure, headless-testable GUI helpers
-├── gui.py            # researcher Tk app (optional drag-and-drop)
-└── supervisor_gui.py # supervisor Tk app
-tests/                # unit + integration tests (fake age backend)
-tests/data/           # 15-record pro forma sample (fictional)
-scripts/              # standalone utilities (pro forma -> xlsx, GUI screenshots)
-packaging/            # PyInstaller specs + macOS/Linux build scripts
-.github/workflows/    # release.yml (build matrix + artifact upload)
+```bash
+# Supervisor — create the shared project, registry and escrow key
+interview-supervisor init -p ~/Nextcloud/project
+
+# Researcher — create config + key, then send the registration file to the supervisor
+interview-intake setup --researcher-id abc \
+  --project-path ~/Nextcloud/project --sync-root ~/Nextcloud
+# -> ~/.config/interview-intake/registration/abc.pub.json
+
+# Supervisor — register that researcher
+interview-supervisor researcher add --from ~/Downloads/abc.pub.json
 ```
 
-The test suite uses a deterministic fake backend, so it runs without `pyrage`
-or the `age` CLI.
+Every day:
+
+```bash
+# Researcher — ingest an interview (-m = 3-letter mnemonic you choose)
+interview-intake intake /media/SDCARD/REC_0042.wav -m xyz
+
+# Researcher — list and decrypt a stored interview
+interview-intake open --list
+interview-intake open 2026-abc-xyz-0001
+```
+
+> **Keys are created only if missing.** `setup` / `keygen` reuse an existing key
+> instead of replacing it. Use `--force` only to deliberately rotate one — old
+> interviews stay encrypted to the old key.
+
+## Desktop apps (GUI)
+
+The same workflows are available as Tk desktop apps, no terminal needed:
+
+| Researcher app | Supervisor app |
+|---|---|
+| ![Researcher app](docs/images/gui-researcher-setup.png) | ![Supervisor app](docs/images/gui-supervisor-init.png) |
+
+```bash
+interview-intake-gui        # researcher app
+interview-supervisor-gui    # supervisor app
+```
+
+See **[docs/gui.md](docs/gui.md)** for a screenshot of every tab and a
+step-by-step walkthrough. Want to run it without installing Python? Use the
+standalone apps in **[packaging/README.md](packaging/README.md)**.
+
+## Command reference
+
+| Task | Command |
+|---|---|
+| Researcher first-run setup | `interview-intake setup --researcher-id abc --project-path P --sync-root S` |
+| Ingest audio | `interview-intake intake <file-or-dir> -m <bbb>` |
+| List / decrypt interviews | `interview-intake open --list` · `interview-intake open <id>` |
+| Integrity check | `interview-intake verify` |
+| Supervisor: create project | `interview-supervisor init -p <project>` |
+| Supervisor: researchers | `interview-supervisor researcher add --from <file>` · `interview-supervisor researcher list` |
+| Supervisor: escrow backup | `interview-supervisor escrow backup --out <dir>` |
+| Registration request / QR | `interview-intake registration [--qr] [--qr-out FILE]` |
+| Generate a key | `interview-intake keygen --out <dir> --name <id>` |
+| Seed templates | `interview-intake templates --overwrite` |
+| Show config / backends | `interview-intake config show` |
+
+## Documentation
+
+| Doc | Contents |
+|---|---|
+| [INSTALL.md](INSTALL.md) | Requirements, pip/venv, macOS step-by-step, extras, troubleshooting. |
+| [docs/usage.md](docs/usage.md) | Full CLI walkthrough, supervisor/registry, file layout, config schema, ID grammar. |
+| [docs/gui.md](docs/gui.md) | Desktop apps: every tab, screenshots, step-by-step. |
+| [docs/security.md](docs/security.md) | Trust model, crypto/integrity guarantees, Whisper notes, limitations. |
+| [docs/reference.md](docs/reference.md) | Spec conformance decisions, pro forma / Excel export. |
+| [docs/development.md](docs/development.md) | Dev setup, tests, source layout, packaging/releases. |
+| [docs/implementation-plan.md](docs/implementation-plan.md) | Roadmap and delivered phases (Italian). |
+
+## Trust in one paragraph
+
+Nextcloud is trusted for availability but **not** confidentiality; the SD card
+is untrusted after use. No plaintext is written during intake, decryption into
+the sync folder is refused, and every interview is recoverable with the
+supervisor's escrow key — old interviews are never re-encrypted. Full details in
+[docs/security.md](docs/security.md).
+
+## License
+
+MIT — see [LICENSE](LICENSE).
