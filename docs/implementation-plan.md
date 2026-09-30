@@ -156,7 +156,7 @@ Modificati:
 |---|---|---|---|
 | 0 | Emenda spec, conferme | 0.5 gg | ✅ decisioni prese |
 | 1 | Supervisor core + CLI (init, researcher, escrow) + QR | 2–3 gg | ✅ fatto |
-| 2 | File di registrazione + wizard researcher | 1–2 gg | da fare |
+| 2 | File di registrazione + wizard researcher | 1–2 gg | ✅ fatto |
 | 3 | Masterfile + export Excel | 1–2 gg | da fare |
 | 4 | GUI Tk stdlib per entrambi i ruoli | 2–3 gg | da fare |
 | 5 | Packaging macOS/Linux + CI release | 3–5 gg | da fare |
@@ -176,6 +176,19 @@ Modificati:
 - `crypto.py`: `validate_recipient`, `read_identity`.
 - Test: `test_qr.py`, `test_registration.py`, `test_supervisor.py`,
   `test_supervisor_cli.py` (26 nuovi test, suite totale 147).
+
+### Phase 2 — consegnato
+
+- `setup` del ricercatore scrive `registration/<id>.pub.json` accanto al config
+  (flag `--display-name`, `--no-registration`, `--qr`).
+- Nuovo comando `interview-intake registration`: stampa/esporta la richiesta di
+  registrazione, QR terminale (`--qr`) o su file (`--qr-out`, svg/png/txt).
+- `registration.py`: `create_from_public_key`.
+- `open` guidato: se non si passa un ID e la sessione è interattiva, propone la
+  lista numerata e fa scegliere (`_select_interview`).
+- Scambio simmetrico: `interview-supervisor researcher add --from <registration.json>`.
+- Messaggi del `setup` aggiornati per puntare al nuovo flusso supervisor.
+- `tests/test_researcher_registration.py` (5 nuovi test, suite totale 152).
 
 ## 11. Rischi / punti aperti
 

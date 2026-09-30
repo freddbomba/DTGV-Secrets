@@ -264,7 +264,11 @@ the detailed reference.
      --install-templates
    ```
 
-   It prints your **public key**. Send it to the supervisor.
+   It writes `~/.config/interview-intake/config.json` and a **registration
+   request** at `~/.config/interview-intake/registration/<id>.pub.json`,
+   containing your public key. Send that file (or the printed public key) to the
+   supervisor, who registers it with
+   `interview-supervisor researcher add --from <file>`.
 
 3. **Wait until the supervisor confirms** your key is in `registry.json`.
 
@@ -314,6 +318,7 @@ the detailed reference.
 | Task | Command |
 |---|---|
 | First-run setup (researcher) | `interview-intake setup --researcher-id abc --project-path P --sync-root S` |
+| Show/export registration request | `interview-intake registration [--out FILE] [--qr] [--qr-out FILE]` |
 | Add escrow key (supervisor) | `interview-intake setup --create-escrow` (or `keygen --name supervisor`) |
 | Show config / backends | `interview-intake config show` |
 | Ingest audio | `interview-intake intake <file-or-dir> -m <bbb>` |
@@ -417,7 +422,7 @@ Register a researcher without hand-editing JSON:
 # from a pasted public key
 interview-supervisor researcher add abc --name "Researcher ABC" --key age1...
 
-# or from the researcher's registration.json (Phase 2)
+# or from the researcher's registration.json
 interview-supervisor researcher add --from ~/Downloads/abc.pub.json
 
 interview-supervisor researcher list

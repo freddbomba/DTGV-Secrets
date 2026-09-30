@@ -8,6 +8,7 @@ Subcommands:
 * ``verify``  -- check registry + stored files
 * ``keygen``  -- generate an age X25519 keypair
 * ``setup``   -- first-run: create config and keys if missing
+* ``registration`` -- show/export the registration request (public key)
 * ``templates`` -- seed the shared project templates
 """
 
@@ -23,6 +24,7 @@ from . import __version__
 from .config import (
     default_config_dir,
     default_config_path,
+    key_path_for,
     load_config,
     save_config,
     validate_config,
@@ -41,6 +43,8 @@ from .intake import perform_intake, scan_audio_files
 from .media import eject_path
 from .models import Config
 from .open_interview import list_interviews, open_interview
+from .qr import QrUnavailableError, qr_available, render_ascii, write_qr
+from .registration import RegistrationRequest, write_registration
 from .templates import install_default_templates
 from .verify import verify_project
 
@@ -127,11 +131,33 @@ def build_parser() -> argparse.ArgumentParser:
     setup.add_argument("--sync-wait-seconds", type=int, default=3)
     setup.add_argument("--lock-stale-seconds", type=int, default=60)
     setup.add_argument("--install-templates", action="store_true")
+    setup.add_argument(
+        "--display-name",
+        help="Display name for the registration request (default: Researcher <ID>).",
+    )
+    setup.add_argument(
+        "--no-registration",
+        action="store_true",
+        help="Do not write the registration request file.",
+    )
+    setup.add_argument("--qr", action="store_true", help="Print the public key as a terminal QR.")
     setup.add_argument("-y", "--yes", action="store_true", help="Non-interactive.")
     setup.add_argument(
         "--force", action="store_true", help="Regenerate keys even if present."
     )
     setup.set_defaults(func=cmd_setup)
+
+    registration = sub.add_parser(
+        "registration", help="Show or export your registration request (public key)."
+    )
+    registration.add_argument("--out", help="Write registration.json to this path.")
+    registration.add_argument("--display-name", help="Display name to embed in the request.")
+    registration.add_argument("--qr", action="store_true", help="Print the public key as a terminal QR.")
+    registration.add_argument("--qr-out", help="Write the public key QR to a file (.svg/.png/.txt).")
+    registration.add_argument(
+        "--format", dest="fmt", choices=["svg", "png", "txt"], help="QR file format."
+    )
+    registration.set_defaults(func=cmd_registration)
 
     templates = sub.add_parser("templates", help="Seed shared project templates.")
     templates.add_argument("--project", help="Override project folder path.")
@@ -198,6 +224,20 @@ def _select_source(source: Optional[str], assume_yes: bool) -> Path:
         print("Invalid selection.")
 
 
+def _select_interview(ids: list[str]) -> Optional[str]:
+    """Prompt the user to pick an interview from a list (interactive only)."""
+    print("Interviews:")
+    for index, interview_id in enumerate(ids, start=1):
+        print(f"  {index}. {interview_id}")
+    while True:
+        choice = input(f"Select [1-{len(ids)}] (Enter to cancel): ").strip()
+        if not choice:
+            return None
+        if choice.isdigit() and 1 <= int(choice) <= len(ids):
+            return ids[int(choice) - 1]
+        print("Invalid selection.")
+
+
 def _confirm(prompt: str, assume_yes: bool) -> bool:
     if assume_yes:
         return True
@@ -235,6 +275,27 @@ def _ensure_key(key_path: Path, *, force: bool, label: str) -> tuple[bool, str]:
     print(f"Generated {label}: {key_path}")
     print(f"Public key: {recipient}")
     return True, recipient
+
+
+def _registration_path_for(config: Config, config_path: Path) -> Path:
+    """Registration request lives next to the config (not in the shared tree)."""
+    return expand_path(config_path).parent / "registration" / f"{config.researcher_id}.pub.json"
+
+
+def _display_name_for(config: Config, override: Optional[str] = None) -> str:
+    """Human-readable name for the registration request."""
+    if override and override.strip():
+        return override.strip()
+    return f"Researcher {config.researcher_id.upper()}"
+
+
+def _print_terminal_qr(text: str) -> None:
+    if not qr_available():
+        raise QrUnavailableError(
+            "QR rendering needs the optional 'qrcode' package. "
+            "Install it with: pip install 'interview-intake[qr]'"
+        )
+    sys.stdout.write(render_ascii(text))
 
 
 # --------------------------------------------------------------------------- #
@@ -305,8 +366,12 @@ def cmd_open(args) -> int:
         print(f"Interviews in {project}:")
         for interview_id in ids:
             print(f"  {interview_id}")
-        if not args.interview_id:
+        if args.list or not _is_interactive():
             return 0
+        selected = _select_interview(ids)
+        if selected is None:
+            return 0
+        args.interview_id = selected
 
     path = open_interview(
         project,
@@ -497,18 +562,54 @@ def cmd_setup(args) -> int:
             else "Templates already present."
         )
 
+    registration_path: Optional[Path] = None
+    if not getattr(args, "no_registration", False):
+        registration_path = _registration_path_for(config, config_path)
+        request = RegistrationRequest.create_from_public_key(
+            config.researcher_id,
+            _display_name_for(config, getattr(args, "display_name", None)),
+            researcher_pub,
+        )
+        write_registration(registration_path, request)
+        print(f"Registration request: {registration_path}")
+        if args.qr:
+            _print_terminal_qr(researcher_pub)
+
     print("\n== registry.json ==")
     print(_registry_snippet(config, researcher_pub, supervisor_pub))
+    target = registration_path if registration_path else "<researcher>.pub.json"
     print(
         "\nThe app never creates or edits registry.json (spec section 15).\n"
-        "Give this snippet to the supervisor to place at "
-        f"{expand_path(config.project_path) / 'registry.json'}."
+        "Send your registration request to the supervisor, who registers it with:\n"
+        f"  interview-supervisor researcher add --from {target}"
     )
     if supervisor_pub is None:
         print(
             "If you are not the supervisor, do not create the escrow key; the "
             "supervisor provisions registry.json."
         )
+    return 0
+
+
+def cmd_registration(args) -> int:
+    config, _ = load_config(getattr(args, "config", None))
+    key_path = key_path_for(config)
+    public_key = public_key_for_identity_file(key_path)
+    request = RegistrationRequest.create_from_public_key(
+        config.researcher_id,
+        _display_name_for(config, getattr(args, "display_name", None)),
+        public_key,
+    )
+    if args.out:
+        path = write_registration(expand_path(args.out), request)
+        print(f"Wrote {path}")
+    else:
+        print(json.dumps(request.to_dict(), indent=2))
+    if args.qr:
+        _print_terminal_qr(public_key)
+    if args.qr_out:
+        path = write_qr(public_key, expand_path(args.qr_out), fmt=args.fmt)
+        print(f"Wrote QR: {path}")
     return 0
 
 

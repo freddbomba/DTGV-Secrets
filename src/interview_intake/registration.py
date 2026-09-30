@@ -45,10 +45,17 @@ class RegistrationRequest:
     ) -> "RegistrationRequest":
         """Build a request by deriving the public key from an identity file."""
         public_key = public_key_for_identity_file(expand_path(identity_path))
+        return cls.create_from_public_key(researcher_id, display_name, public_key)
+
+    @classmethod
+    def create_from_public_key(
+        cls, researcher_id: str, display_name: str, age_public_key: str
+    ) -> "RegistrationRequest":
+        """Build a request when the public key is already known."""
         return cls(
             researcher_id=researcher_id,
             display_name=display_name,
-            age_public_key=public_key,
+            age_public_key=age_public_key,
             created_at=_utcnow(),
         )
 
