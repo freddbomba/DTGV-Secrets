@@ -66,8 +66,10 @@ Optional extras:
 |---|---|
 | `pyrage` | Preferred age binding (no CLI needed). |
 | `duration` | `mutagen`, used to read duration from mp3/m4a/flac. WAV duration uses the stdlib. |
-| `gui` | `tkinterdnd2`, enables drag-and-drop. |
+| `gui` | GUI shell. Tk ships with Python / the OS, so this installs nothing. |
+| `gui-dnd` | `tkinterdnd2`, optional drag-and-drop for the GUIs. |
 | `qr` | `qrcode`, for terminal/SVG/PNG QR codes (key exchange and backup). |
+| `packaging` | `pyinstaller`, to build standalone desktop apps. |
 | `dev` | `pytest`, `pyrage`, `mutagen`. |
 
 Check which backend is available:
