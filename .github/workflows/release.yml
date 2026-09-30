@@ -1,0 +1,116 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version override (defaults to the package __version__)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: macos
+          - os: ubuntu-latest
+            platform: linux
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends python3-tk binutils
+
+      - name: Install appimagetool (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL \
+            "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage" \
+            -o "$HOME/.local/bin/appimagetool"
+          chmod +x "$HOME/.local/bin/appimagetool"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[pyrage,qr,packaging]'
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          if [ -z "$VERSION" ]; then
+            VERSION="$(python -c 'import interview_intake; print(interview_intake.__version__)')"
+          fi
+          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build macOS apps and DMGs
+        if: runner.os == 'macOS'
+        env:
+          CODESIGN_IDENTITY: ${{ secrets.MACOS_CODESIGN_IDENTITY }}
+          NOTARY_PROFILE: ${{ secrets.MACOS_NOTARY_PROFILE }}
+        run: packaging/build_macos.sh --version "${{ steps.version.outputs.value }}"
+
+      - name: Build Linux bundles, AppImages and debs
+        if: runner.os == 'Linux'
+        env:
+          # Run the appimagetool AppImage without FUSE on modern runners.
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: packaging/build_linux.sh --all --version "${{ steps.version.outputs.value }}"
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: interview-apps-${{ matrix.platform }}-${{ steps.version.outputs.value }}
+          path: |
+            dist/*.dmg
+            dist/*.AppImage
+            dist/*.deb
+          if-no-files-found: error
+
+  tests:
+    name: Test suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends python3-tk
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev,pyrage,qr,packaging]' pyyaml
+      - name: Run pytest
+        run: python -m pytest -q

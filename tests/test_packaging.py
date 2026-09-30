@@ -82,6 +82,10 @@ def test_release_workflow_uses_build_scripts() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
     assert "build_macos.sh" in text
     assert "build_linux.sh" in text
+    assert "macos-latest" in text
+    assert "ubuntu-latest" in text
+    assert "python3-tk" in text
+    assert "3.11" in text
 
 
 def test_release_workflow_parses() -> None:

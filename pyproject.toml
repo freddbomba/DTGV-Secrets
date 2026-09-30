@@ -29,7 +29,7 @@ qr = ["qrcode>=7.4"]
 excel = ["openpyxl>=3.1"]
 # PyInstaller-based standalone app builds.
 packaging = ["pyinstaller>=6"]
-dev = ["pytest>=7", "pytest-cov>=4", "pyrage>=1.1", "mutagen>=1.45", "openpyxl>=3.1", "qrcode>=7.4"]
+dev = ["pytest>=7", "pytest-cov>=4", "pyrage>=1.1", "mutagen>=1.45", "openpyxl>=3.1", "qrcode>=7.4", "pyyaml>=6"]
 
 [project.scripts]
 interview-intake = "interview_intake.cli:main"
