@@ -37,4 +37,5 @@ build(
     app_name="Interview Intake",
     cli_name="interview-intake",
     bundle_id="net.trasformatorio.interview-intake",
+    icon=ROOT / "packaging" / "icons" / "interview-intake.icns",
 )

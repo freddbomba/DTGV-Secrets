@@ -66,6 +66,7 @@ def build(
     app_name: str,
     cli_name: str,
     bundle_id: str,
+    icon=None,
 ):
     """Build a CLI binary and a windowed GUI (a macOS .app when on Darwin)."""
     hidden, datas, binaries = gather()
@@ -133,7 +134,7 @@ def build(
         BUNDLE(
             collection,
             name=f"{app_name}.app",
-            icon=None,
+            icon=str(icon) if icon else None,
             bundle_identifier=bundle_id,
             info_plist={"NSHighResolutionCapable": True},
         )

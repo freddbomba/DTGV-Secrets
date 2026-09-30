@@ -23,7 +23,9 @@ packaging/
 ├── entry/                     # top-level entry scripts (frozen __main__)
 ├── build_macos.sh             # .app -> .dmg
 ├── build_linux.sh             # onedir -> .AppImage / .deb
-├── desktop/                   # .desktop launchers + icons for Linux
+├── desktop/                   # .desktop launchers for Linux
+├── icons/                     # lab art (source) + generated PNG/ICNS per role
+├── make_icons.py              # regenerate icons/ from the source art
 └── README.md
 ```
 
@@ -41,6 +43,26 @@ packaging/
 - **Linux**: `python3-tk` (Tk is not in the base interpreter) and `binutils`
   (for `strip`). `appimagetool` / FUSE are only needed for `--appimage`, and
   `dpkg-deb` only for `--deb`.
+
+## App icons
+
+All roles use the lab mark in `icons/icon-orange.png` (vector master:
+`icons/icon-orange.svg`). The committed derived files are:
+
+| File | Used by |
+|---|---|
+| `icons/interview-intake.png`, `icons/interview-supervisor.png` | Linux `.desktop`, AppImage, `.deb` (256x256) |
+| `icons/interview-intake.icns`, `icons/interview-supervisor.icns` | macOS `.app` bundle (multi-resolution) |
+
+To change the branding, replace `icons/icon-orange.png` (square, >= 512px)
+and regenerate - Pillow is only needed for this step:
+
+```bash
+python -m pip install pillow
+python packaging/make_icons.py
+```
+
+The generated files are committed, so normal builds never need Pillow.
 
 ## macOS: `.app` + `.dmg`
 

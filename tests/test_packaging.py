@@ -17,6 +17,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGING = ROOT / "packaging"
 DESKTOP_DIR = PACKAGING / "desktop"
+ICONS_DIR = PACKAGING / "icons"
 WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
 
 SHELL_SCRIPTS = sorted(PACKAGING.glob("build_*.sh"))
@@ -67,13 +68,45 @@ def _desktop_value(path: Path, key: str) -> str:
     raise AssertionError(f"{path.name} has no {key} entry")
 
 
+def _png_size(path: Path) -> tuple[int, int]:
+    import struct
+
+    return struct.unpack(">II", path.read_bytes()[16:24])
+
+
 def test_desktop_icons_exist_and_are_png() -> None:
     if not DESKTOP_FILES:
         pytest.skip("no .desktop files yet")
     for path in DESKTOP_FILES:
-        icon = DESKTOP_DIR / f"{_desktop_value(path, 'Icon')}.png"
+        icon = ICONS_DIR / f"{_desktop_value(path, 'Icon')}.png"
         assert icon.is_file(), f"missing icon {icon.name}"
         assert icon.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n", f"{icon.name} is not a PNG"
+        assert _png_size(icon) == (256, 256), f"{icon.name} is not 256x256"
+
+
+def test_macos_icns_icons_exist() -> None:
+    if not DESKTOP_FILES:
+        pytest.skip("no .desktop files yet")
+    for path in DESKTOP_FILES:
+        icns = ICONS_DIR / f"{_desktop_value(path, 'Icon')}.icns"
+        assert icns.is_file(), f"missing macOS icon {icns.name}"
+        data = icns.read_bytes()
+        assert data[:4] == b"icns", f"{icns.name} is not an ICNS file"
+        import struct
+
+        assert struct.unpack(">I", data[4:8])[0] == len(data), f"{icns.name} has a bad length"
+
+
+@pytest.mark.parametrize(
+    ("role", "spec"),
+    [
+        ("interview-intake", "interview-intake.spec"),
+        ("interview-supervisor", "interview-supervisor.spec"),
+    ],
+)
+def test_pyinstaller_specs_reference_role_icons(role: str, spec: str) -> None:
+    text = (PACKAGING / spec).read_text(encoding="utf-8")
+    assert f"{role}.icns" in text, f"{spec} does not reference {role}.icns"
 
 
 def test_release_workflow_uses_build_scripts() -> None:

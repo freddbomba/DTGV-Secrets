@@ -19,6 +19,7 @@ VERSION=""
 DIST_DIR="${ROOT}/dist"
 BUILD_DIR="${ROOT}/build"
 DESKTOP_DIR="${SCRIPT_DIR}/desktop"
+ICONS_DIR="${SCRIPT_DIR}/icons"
 MAKE_APPIMAGE=0
 MAKE_DEB=0
 
@@ -104,12 +105,10 @@ exec "\${HERE}/usr/bin/${name}/${name}" "\$@"
 EOF
   chmod +x "${appdir}/AppRun"
   cp "${DESKTOP_DIR}/${slug}.desktop" "${appdir}/${slug}.desktop"
-  cp "${DESKTOP_DIR}/${slug}.png" "${appdir}/${slug}.png"
+  cp "${ICONS_DIR}/${slug}.png" "${appdir}/${slug}.png"
+  cp "${ICONS_DIR}/${slug}.png" "${appdir}/.DirIcon"
   echo "==> appimagetool: $(basename "${out}")"
-  ARCH="$(uname -m)" appimagetool --no-appstream \
-    --desktop-file "${appdir}/${slug}.desktop" \
-    --icon-file "${appdir}/${slug}.png" \
-    "${appdir}" "${out}"
+  ARCH="$(uname -m)" appimagetool --no-appstream "${appdir}" "${out}"
 }
 
 build_deb() {
@@ -128,7 +127,7 @@ build_deb() {
   ln -sf "${name}/${name}" "${pkgdir}/usr/bin/${slug}-gui"
   ln -sf "${name}/${slug}" "${pkgdir}/usr/bin/${slug}"
   cp "${DESKTOP_DIR}/${slug}.desktop" "${pkgdir}/usr/share/applications/${slug}.desktop"
-  cp "${DESKTOP_DIR}/${slug}.png" "${pkgdir}/usr/share/icons/hicolor/256x256/apps/${slug}.png"
+  cp "${ICONS_DIR}/${slug}.png" "${pkgdir}/usr/share/icons/hicolor/256x256/apps/${slug}.png"
   cat > "${pkgdir}/DEBIAN/control" <<EOF
 Package: ${slug}
 Version: ${VERSION}

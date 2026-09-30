@@ -37,4 +37,5 @@ build(
     app_name="Interview Supervisor",
     cli_name="interview-supervisor",
     bundle_id="net.trasformatorio.interview-supervisor",
+    icon=ROOT / "packaging" / "icons" / "interview-supervisor.icns",
 )
