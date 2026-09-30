@@ -59,6 +59,32 @@ def _read_identity(path: Path) -> str:
     raise CryptoError(f"No identity found in {path}.")
 
 
+def read_identity(path: Path) -> str:
+    """Public wrapper around the identity-file reader (used by backup tooling)."""
+    return _read_identity(path)
+
+
+def validate_recipient(recipient: str) -> str:
+    """Validate and normalise an age X25519 public key (recipient).
+
+    Always checks the structural prefix.  When ``pyrage`` is available the key is
+    additionally parsed, which catches typos before they reach the registry.
+    """
+    value = str(recipient or "").strip()
+    if not value:
+        raise CryptoError("Empty age recipient.")
+    if not value.startswith("age1") or len(value) < 16:
+        raise CryptoError(f"Not a valid age X25519 recipient: {value!r}")
+    if importlib.util.find_spec("pyrage") is not None:
+        import pyrage
+
+        try:
+            pyrage.x25519.Recipient.from_str(value)
+        except Exception as exc:
+            raise CryptoError(f"Invalid age recipient {value!r}: {exc}") from exc
+    return value
+
+
 def public_key_for_identity_file(path: Path) -> str:
     """Derive the age recipient (public key) for an existing identity file.
 

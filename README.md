@@ -25,6 +25,7 @@ places where the spec left an ambiguity.
 - [Trust model](#trust-model)
 - [Folder layout](#folder-layout)
 - [Supervisor setup](#supervisor-setup-one-time)
+- [Supervisor App (registry & escrow)](#supervisor-app-registry--escrow)
 - [Researcher setup](#researcher-setup-once-per-machine)
 - [Daily use: intake](#daily-use-intake)
 - [Opening and decrypting](#opening-and-decrypting)
@@ -66,6 +67,7 @@ Optional extras:
 | `pyrage` | Preferred age binding (no CLI needed). |
 | `duration` | `mutagen`, used to read duration from mp3/m4a/flac. WAV duration uses the stdlib. |
 | `gui` | `tkinterdnd2`, enables drag-and-drop. |
+| `qr` | `qrcode`, for terminal/SVG/PNG QR codes (key exchange and backup). |
 | `dev` | `pytest`, `pyrage`, `mutagen`. |
 
 Check which backend is available:
@@ -387,6 +389,61 @@ Interview ID grammar (`^[0-9]{4}-[a-z]{3}-[a-z]{3}-[0-9]{4}$`):
 
 Everything is lowercased; uppercase input is normalised. Reserved mnemonics
 (`key`, `tmp`, `new`, `old`, `aux`, `con`, `prn`, `nul`) are rejected.
+
+---
+
+## Supervisor App (registry & escrow)
+
+The `interview-supervisor` command provisions and maintains the shared project,
+including `registry.json`. Per the 2026-09 role split, the **Supervisor App owns
+`registry.json`** (creates and manages it); the **Researcher App never creates
+it** — it only reads it and appends allocation records.
+
+One-time setup, in one command:
+
+```bash
+interview-supervisor init -p ~/Nextcloud/project \
+  --escrow-key ~/.config/interview-intake/keys/supervisor.key
+```
+
+This creates `interviews/` and `templates/`, generates the escrow key, and writes
+a valid `registry.json`. It is idempotent: an existing registry is kept. Use
+`--force` only to deliberately regenerate the escrow key and rewrite the registry
+(destructive).
+
+Register a researcher without hand-editing JSON:
+
+```bash
+# from a pasted public key
+interview-supervisor researcher add abc --name "Researcher ABC" --key age1...
+
+# or from the researcher's registration.json (Phase 2)
+interview-supervisor researcher add --from ~/Downloads/abc.pub.json
+
+interview-supervisor researcher list
+interview-supervisor researcher deactivate abc   # keep history, block new use
+interview-supervisor researcher remove abc       # refused if interviews exist
+```
+
+Escrow key backup, with QR codes for offline/paper storage:
+
+```bash
+interview-supervisor escrow show --qr
+interview-supervisor escrow backup --out ~/escrow-backup
+# writes escrow-*.key (0600), escrow-public-*.svg, escrow-secret-*.svg (0600), README
+```
+
+`verify` additionally reports registry-level issues (duplicate public keys,
+inactive researchers with issued interviews, interviews for unknown
+researchers):
+
+```bash
+interview-supervisor verify -p ~/Nextcloud/project
+```
+
+> QR output needs the optional `qrcode` package: `pip install -e '.[qr]'`.
+> The legacy manual `registry.json` flow below still works, but the Supervisor
+> App is now the supported path.
 
 ---
 
@@ -721,7 +778,11 @@ Layout:
 
 ```
 src/interview_intake/
-├── cli.py            # argparse entry points
+├── cli.py            # researcher CLI entry points
+├── supervisor_cli.py # supervisor CLI entry points (interview-supervisor)
+├── supervisor.py     # supervisor core: registry provisioning + escrow + QR backup
+├── registration.py   # registration.json public-key exchange document
+├── qr.py             # QR rendering (terminal/SVG/PNG), optional qrcode
 ├── config.py         # ~/.config/interview-intake/config.json
 ├── models.py         # registry/meta/config dataclasses + validation
 ├── id_grammar.py     # section 4 grammar
